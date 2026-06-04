@@ -2,6 +2,8 @@
 
 This note captures the first split-brain-safe operating model for the MemoryBackend / Agent Loop experiment.
 
+Important framing: this is not yet a multi-agent collaboration structure. `peerworker` is Jayda's implementation worker. The success criterion is that Jayda can define reusable, bounded workflows that future agents can reuse; `peerworker` is the first executor proving the workflow.
+
 ## Roles
 
 ### Jayda profile
@@ -42,7 +44,8 @@ peerworker ready
 
 Responsibilities:
 
-- perform concrete MemoryBackend implementation tasks in `https://github.com/jimmywuwu/ca3`;
+- convert Jayda-defined MemoryBackend commitments into concrete implementation work in `https://github.com/jimmywuwu/ca3`;
+- follow reusable workflow contracts that can later be adopted by other specialized agents;
 - use narrow toolsets when possible;
 - report files changed, tests run, and blockers;
 - avoid architecture drift and avoid changing protected collaboration contracts.
