@@ -42,7 +42,7 @@ peerworker ready
 
 Responsibilities:
 
-- perform concrete repo implementation tasks;
+- perform concrete MemoryBackend implementation tasks in `https://github.com/jimmywuwu/ca3`;
 - use narrow toolsets when possible;
 - report files changed, tests run, and blockers;
 - avoid architecture drift and avoid changing protected collaboration contracts.
@@ -64,7 +64,7 @@ from peer import HermesProfileExecutor, WorkerProfile
 executor = HermesProfileExecutor(
     worker=WorkerProfile(
         profile_name="peerworker",
-        workdir="/home/jimmywu0621/interview/peer",
+        workdir="/home/jimmywu0621/interview/ca3",
     ),
     dry_run=True,
 )
