@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, Protocol
 
 
 class TickType(str, Enum):
@@ -140,6 +141,104 @@ class Commitment:
 
 
 @dataclass(frozen=True)
+class WorkerProfile:
+    profile_name: str
+    workdir: str
+    toolsets: tuple[str, ...] = ("terminal", "file")
+
+
+@dataclass(frozen=True)
+class WorkerDispatch:
+    request_id: str
+    worker_profile: str
+    command: tuple[str, ...]
+    prompt: str
+    dry_run: bool
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+
+
+class WorkerExecutor(Protocol):
+    def dispatch(self, commitment: Commitment, architect_agent_id: str) -> WorkerDispatch:
+        """Dispatch one commitment to an isolated worker profile."""
+
+
+@dataclass(frozen=True)
+class HermesProfileExecutor:
+    worker: WorkerProfile
+    dry_run: bool = True
+    timeout_seconds: int = 600
+
+    def dispatch(self, commitment: Commitment, architect_agent_id: str) -> WorkerDispatch:
+        prompt = build_worker_prompt(
+            commitment,
+            architect_agent_id=architect_agent_id,
+            repo_path=self.worker.workdir,
+        )
+        command = (
+            "hermes",
+            "--profile",
+            self.worker.profile_name,
+            "chat",
+            "-q",
+            prompt,
+            "--toolsets",
+            ",".join(self.worker.toolsets),
+        )
+        if self.dry_run:
+            return WorkerDispatch(
+                request_id=commitment.request_id,
+                worker_profile=self.worker.profile_name,
+                command=command,
+                prompt=prompt,
+                dry_run=True,
+            )
+
+        completed = subprocess.run(
+            command,
+            cwd=self.worker.workdir,
+            text=True,
+            capture_output=True,
+            timeout=self.timeout_seconds,
+            check=False,
+        )
+        return WorkerDispatch(
+            request_id=commitment.request_id,
+            worker_profile=self.worker.profile_name,
+            command=command,
+            prompt=prompt,
+            dry_run=False,
+            exit_code=completed.returncode,
+            stdout=completed.stdout,
+            stderr=completed.stderr,
+        )
+
+
+def build_worker_prompt(commitment: Commitment, *, architect_agent_id: str, repo_path: str) -> str:
+    criteria = "\n".join(f"- {criterion}" for criterion in commitment.success_criteria)
+    project = commitment.related_project or "unspecified"
+    return f"""You are the isolated implementation worker for the peer Agent Loop experiment.
+
+Architect / discussion owner: {architect_agent_id}
+Requester: {commitment.requester}
+Project: {project}
+Repository: {repo_path}
+Request ID: {commitment.request_id}
+Task: {commitment.title}
+
+Success criteria:
+{criteria}
+
+Operating boundaries:
+- Keep architecture/product discussion with {architect_agent_id}; focus on implementation inside the repository.
+- Use tests first for behavior changes.
+- Keep changes small and report exact files changed, tests run, and any blockers.
+- Do not change Jayda ↔ Jaquan's trading_system collaboration workflow or protected contract.
+"""
+
+
+@dataclass(frozen=True)
 class AgentState:
     agent_id: str
     active_commitments: tuple[Commitment, ...] = ()
@@ -169,6 +268,7 @@ class TickContext:
     request_board: RequestBoard
     contracts: ContractRegistry
     budget: TickBudget = TickBudget()
+    worker_executor: WorkerExecutor | None = None
 
 
 @dataclass(frozen=True)
@@ -180,6 +280,7 @@ class TickOutput:
     memory_writes: tuple[str, ...]
     contract_change_proposals: tuple[str, ...]
     risk_flags: tuple[str, ...]
+    worker_dispatches: tuple[WorkerDispatch, ...]
     summary: str
 
 
@@ -209,7 +310,8 @@ def run_tick(context: TickContext) -> TickOutput:
     updated_requests, new_commitments, risk_flags = _triage_requests(context)
 
     active_commitments = context.state.active_commitments + new_commitments
-    summary = _summarize(context.tick_type, relevant_events, new_commitments, risk_flags)
+    worker_dispatches = _dispatch_worker_tasks(context, active_commitments)
+    summary = _summarize(context.tick_type, relevant_events, new_commitments, risk_flags, worker_dispatches)
     next_state = replace(
         context.state,
         active_commitments=active_commitments,
@@ -224,6 +326,7 @@ def run_tick(context: TickContext) -> TickOutput:
         memory_writes=(),
         contract_change_proposals=(),
         risk_flags=risk_flags,
+        worker_dispatches=worker_dispatches,
         summary=summary,
     )
 
@@ -297,11 +400,21 @@ def _request_score(profile: AgentProfile, request: Request) -> int:
     return min(score, 100)
 
 
+def _dispatch_worker_tasks(context: TickContext, active_commitments: tuple[Commitment, ...]) -> tuple[WorkerDispatch, ...]:
+    if context.tick_type is not TickType.EXECUTION or context.worker_executor is None:
+        return ()
+    return tuple(
+        context.worker_executor.dispatch(commitment, architect_agent_id=context.profile.agent_id)
+        for commitment in active_commitments
+    )
+
+
 def _summarize(
     tick_type: TickType,
     relevant_events: tuple[Event, ...],
     commitments: tuple[Commitment, ...],
     risk_flags: tuple[str, ...],
+    worker_dispatches: tuple[WorkerDispatch, ...],
 ) -> str:
     projects = sorted({commitment.related_project for commitment in commitments if commitment.related_project})
     parts = [f"{tick_type.value} tick"]
@@ -313,6 +426,8 @@ def _summarize(
         parts.append("projects: " + ", ".join(projects))
     if risk_flags:
         parts.append("risk flags: " + ", ".join(risk_flags))
+    if worker_dispatches:
+        parts.append(f"dispatched {len(worker_dispatches)} worker task(s)")
     return "; ".join(parts)
 
 
@@ -325,6 +440,7 @@ __all__ = [
     "ContractRegistry",
     "Event",
     "EventType",
+    "HermesProfileExecutor",
     "Request",
     "RequestBoard",
     "RequestStatus",
@@ -334,6 +450,10 @@ __all__ = [
     "TickContext",
     "TickOutput",
     "TickType",
+    "WorkerDispatch",
+    "WorkerExecutor",
+    "WorkerProfile",
+    "build_worker_prompt",
     "run_tick",
     "standard_15_tick_schedule",
 ]

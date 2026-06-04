@@ -6,6 +6,7 @@ The initial scope is intentionally narrow:
 
 - support Jayda ↔ Jimmy collaboration on the MemoryBackend project;
 - model every agent run as a fixed protocol tick;
+- dispatch concrete implementation commitments to an isolated Hermes worker profile;
 - provide request/contract primitives for future multi-agent collaboration;
 - keep Jayda ↔ Jaquan's existing trading_system collaboration contract protected and unchanged.
 
@@ -25,6 +26,7 @@ The current MVP implements the durable state-transition skeleton:
 - active commitments
 - protected contract guardrails
 - tick summaries for traceability
+- optional worker-profile dispatch for execution ticks
 
 ## Quick start
 
@@ -100,3 +102,4 @@ The current day rhythm is:
 ## Design notes
 
 See [`docs/agent-day-cycle.md`](docs/agent-day-cycle.md) for the operating protocol and collaboration architecture.
+See [`docs/profile-delegation.md`](docs/profile-delegation.md) for the Jayda/peerworker context-isolation experiment.

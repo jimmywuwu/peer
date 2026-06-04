@@ -59,6 +59,7 @@ A tick returns a `TickOutput`:
 - `updated_requests` with lifecycle transitions;
 - `deferred_events` that were sensed but not actionable enough;
 - `memory_writes` reserved for future MemoryBackend integration;
+- `worker_dispatches` containing implementation tasks sent to an isolated worker profile during execution ticks;
 - `contract_change_proposals` reserved for explicit contract negotiation;
 - `risk_flags` for blocked or risky transitions;
 - a compact `summary` for traceability.
@@ -154,7 +155,8 @@ Good next increments:
 
 1. Add JSON serialization for all tick input/output objects.
 2. Add a persistent workspace backed by local files or SQLite.
-3. Add explicit task lifecycle beyond accepted commitments.
-4. Add memory write policy: durable fact vs task log vs skill candidate vs archive.
-5. Add a scheduler that materializes one 15-tick day for one or more agents.
-6. Add human approval policies for high-risk side effects.
+3. Persist `WorkerDispatch` traces so Jayda can review worker output before memory updates.
+4. Add explicit task lifecycle beyond accepted commitments.
+5. Add memory write policy: durable fact vs task log vs skill candidate vs archive.
+6. Add a scheduler that materializes one 15-tick day for one or more agents.
+7. Add human approval policies for high-risk side effects.
